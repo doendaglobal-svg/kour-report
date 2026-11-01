@@ -54,6 +54,12 @@ footer{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);color:v
     </select></label>
     <label>Details <span class="kr">상세 (선택 · 최대 250자)</span><textarea id="detail" maxlength="250" placeholder="When, which room, what happened"></textarea></label>
     <label>Room link <span class="kr">방 링크 (선택)</span><input id="room" placeholder="https://kour.io/…"></label>
+    <label>Screenshot <span class="kr">스크린샷 첨부 (선택)</span></label>
+    <div style="display:flex;gap:8px;align-items:center;margin:-6px 0 12px;">
+      <button type="button" id="shotBtn" style="width:auto;margin:0;padding:8px 14px;font-size:13px;">Attach image (스크린샷 올리기)</button><span style="font-size:12px;color:var(--dim);">or paste with <b>Ctrl+V</b> (복사한 스크린샷을 바로 붙여넣을 수 있습니다)</span>
+      <img id="shotPrev" alt="" style="display:none;max-height:80px;border-radius:6px;border:1px solid var(--line);">
+    </div>
+    <input type="file" id="shot" accept="image/*" style="display:none">
     <button id="go" type="submit">Submit report <span style="font-weight:400">(제보 접수)</span></button>
     <p id="st" role="status" aria-live="polite"></p>
   </form>
@@ -69,6 +75,38 @@ function $(id){return document.getElementById(id);}
 function st(m,c){var s=$('st');s.textContent=m;s.className=c||'';}
 var q=new URLSearchParams(location.search);
 if(q.get('nick'))$('nick').value=q.get('nick');
+var shot='';
+document.getElementById('shotBtn').addEventListener('click',function(){document.getElementById('shot').click();});
+function processShot(f){
+  var rd=new FileReader(); rd.onload=function(ev){
+    var img=new Image();
+    img.onload=function(){
+      try{
+        var mx=900, sc=Math.min(1,mx/Math.max(img.width,img.height));
+        var c=document.createElement('canvas'); c.width=Math.max(1,Math.round(img.width*sc)); c.height=Math.max(1,Math.round(img.height*sc));
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        shot=c.toDataURL('image/jpeg',0.62);
+        var p=document.getElementById('shotPrev'); p.src=shot; p.style.display='block';
+      }catch(eC){ st('Could not process that image. (이미지를 처리할 수 없습니다.)','err'); }
+    };
+    img.onerror=function(){ st('Could not read that image. (이미지를 읽을 수 없습니다.)','err'); };
+    img.src=ev.target.result;
+  }; rd.readAsDataURL(f);
+}
+document.getElementById('shot').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0]; if(f) processShot(f);
+});
+document.addEventListener('paste',function(e){
+  var items=e.clipboardData&&e.clipboardData.items; if(!items) return;
+  for(var i=0;i<items.length;i++){
+    if(items[i].type&&items[i].type.indexOf('image')===0){
+      e.preventDefault();
+      var f=items[i].getAsFile();
+      if(f){ processShot(f); st('Screenshot pasted. (스크린샷이 붙여넣어졌습니다.)','ok'); }
+      return;
+    }
+  }
+});
 var ip='';
 var ipBusy=fetch('https://api.ipify.org?format=json').then(function(r){return r.json();}).then(function(d){ip=(d&&d.ip)?String(d.ip):'';}).catch(function(){});
 function tok(){return fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key='+AK,{method:'POST',headers:{'Content-Type':'application/json'},body:'{"returnSecureToken":true}'}).then(function(r){return r.json();}).then(function(j){if(!j.idToken)throw new Error('auth');return j.idToken;});}
@@ -84,12 +122,15 @@ $('f').addEventListener('submit',function(e){
       var now=Date.now(),dup=false;
       Object.keys(all).forEach(function(k){var v=all[k]||{};if(ip&&String(v.ip||'')===ip&&now-(v.t||0)<COOL)dup=true;});
       if(dup){st('You just reported — please try again in 10 minutes. (방금 접수했습니다 — 10분 뒤에 다시 시도해 주세요.)','warn');$('go').disabled=false;throw new Error('dup');}
-      var rec={nick:nick,ip:ip,target:tnick,reason:$('reason').value,detail:$('detail').value.trim().slice(0,250),room:$('room').value.trim(),t:now,ua:navigator.userAgent};
-      return fetch(DB+'/reports.json?auth='+T,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});
+      var rec={nick:nick,target:tnick,reason:$('reason').value,detail:$('detail').value.trim().slice(0,250),room:$('room').value.trim(),shot:shot,t:now,ua:navigator.userAgent};
+      return fetch(DB+'/reports.json?auth='+T,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)}).then(function(pj){ return pj.json(); }).then(function(pk){
+        try{ var kk=pk&&pk.name; if(kk&&ip){ fetch(DB+'/reports_ip/'+encodeURIComponent(kk)+'.json?auth='+T,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip:ip,t:now})}); } }catch(eI){}
+        return pk;
+      });
     });
   }).then(function(){
     st('Report submitted — saved to the chairman\'s review queue. Thank you! (접수 완료 — 회장님 검수 목록에 기록되었습니다.)','ok');
-    $('f').reset();$('go').disabled=false;
+    $('f').reset();shot='';document.getElementById('shotPrev').style.display='none';$('go').disabled=false;
   }).catch(function(er){
     if(er&&er.message==='dup')return;
     st('Submission failed — check your connection and try again. (접수 실패 — 네트워크를 확인하고 다시 시도해 주세요.)','err');$('go').disabled=false;
