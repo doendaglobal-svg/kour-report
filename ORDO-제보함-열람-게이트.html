@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ORDO 제보함 — 검수 목록</title>
+<title>ORDO 제보함 — 검수 목록 (로그인)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -14,14 +14,13 @@ body{margin:0;padding:32px 16px;background:var(--bg);color:var(--tx);font-family
 .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.22em;color:var(--amber);margin:0 0 6px}
 h1{font-family:'Black Han Sans',sans-serif;font-weight:400;font-size:30px;margin:0 0 4px}
 .wrap{max-width:1100px;margin:0 auto}
-/* 비밀번호 게이트 */
 #gate{max-width:380px;margin:80px auto;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:10px;padding:24px;text-align:center}
 #gate h2{font-family:'Black Han Sans',sans-serif;font-weight:400;font-size:22px;margin:0 0 4px}
 #gate p{color:var(--dim);font-size:13px;margin:0 0 14px}
-#gate input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--tx);padding:10px;font:inherit;text-align:center}
+#gate input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--tx);padding:10px;font:inherit;margin-top:8px}
 #gate input:focus{outline:none;border-color:var(--amber)}
-#gate button{width:100%;margin-top:10px;background:var(--amber);color:#16120a;border:0;border-radius:6px;padding:11px;font:inherit;font-weight:700;cursor:pointer}
-#gateErr{color:var(--err);font-size:12px;min-height:1.3em;margin:8px 0 0}
+#gate button{width:100%;margin-top:12px;background:var(--amber);color:#16120a;border:0;border-radius:6px;padding:11px;font:inherit;font-weight:700;cursor:pointer}
+#gateErr{color:var(--err);font-size:12px;min-height:1.3em;margin:8px 0 0;text-align:center}
 #dash{display:none}
 .bar{display:flex;align-items:center;gap:12px;margin:12px 0 16px}
 .count{color:var(--dim);font-size:13px}
@@ -43,9 +42,10 @@ button.del:hover{filter:brightness(1.2)}
 <body>
 <div id="gate">
   <h2>ORDO 제보함</h2>
-  <p>관리자 접근 — 비밀번호를 입력하세요</p>
+  <p>관리자 로그인 — 계정으로만 데이터를 읽을 수 있습니다</p>
+  <input type="email" id="em" placeholder="관리자 이메일" autocomplete="username">
   <input type="password" id="pw" placeholder="비밀번호" autocomplete="current-password">
-  <button id="go" type="button">열기</button>
+  <button id="go" type="button">로그인</button>
   <p id="gateErr"></p>
 </div>
 <div class="wrap" id="dash">
@@ -59,8 +59,8 @@ button.del:hover{filter:brightness(1.2)}
   <div class="tablewrap">
     <table>
       <thead><tr>
-        <th>시각</th><th>제보자 닉네임</th><th>제보자 UID</th><th>IP</th>
-        <th>대상 닉네임</th><th>대상 UID</th><th>사유</th><th>상세</th><th>방</th><th>관리</th>
+        <th>시각</th><th>제보자 닉네임</th><th>IP</th>
+        <th>대상 닉네임</th><th>사유</th><th>상세</th><th>방</th><th>관리</th>
       </tr></thead>
       <tbody id="tb"></tbody>
     </table>
@@ -72,28 +72,30 @@ button.del:hover{filter:brightness(1.2)}
 'use strict';
 var AK='AIzaSyAOQxmxWvOYnw4O8q0XY4woDsNYJde3nNw';
 var DB='https://chairman-ban-default-rtdb.asia-southeast1.firebasedatabase.app';
-/* ═══════════════════════════════════════════════
-   비밀번호 변경 위치 — 아래 값만 고치면 됩니다
-   ═══════════════════════════════════════════════ */
-var PASS='chairman';
+var authTok='';
 function st(m){document.getElementById('st').textContent=m;}
-function tok(){return fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key='+AK,{method:'POST',headers:{'Content-Type':'application/json'},body:'{"returnSecureToken":true}'}).then(function(r){return r.json();}).then(function(j){if(!j.idToken)throw new Error('auth');return j.idToken;});}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-document.getElementById('go').addEventListener('click',function(){
-  var v=document.getElementById('pw').value;
-  if(v===PASS){
+function gateErr(m){document.getElementById('gateErr').textContent=m;}
+function login(){
+  var em=document.getElementById('em').value.trim(), pw=document.getElementById('pw').value;
+  if(!em||!pw){gateErr('이메일과 비밀번호를 입력하세요.');return;}
+  document.getElementById('go').disabled=true; gateErr('');
+  fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key='+AK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em,password:pw,returnSecureToken:true})})
+  .then(function(r){return r.json();}).then(function(j){
+    if(!j.idToken){gateErr('로그인 실패 — 이메일/비밀번호를 확인하세요.');document.getElementById('go').disabled=false;return;}
+    authTok=j.idToken;
     document.getElementById('gate').style.display='none';
     document.getElementById('dash').style.display='block';
     load();
-  } else {
-    document.getElementById('gateErr').textContent='비밀번호가 틀렸습니다.';
-    document.getElementById('pw').value='';
-  }
-});
-document.getElementById('pw').addEventListener('keydown',function(e){ if(e.key==='Enter') document.getElementById('go').click(); });
+  }).catch(function(){gateErr('로그인 실패 — 네트워크 확인');document.getElementById('go').disabled=false;});
+}
+document.getElementById('go').addEventListener('click',login);
+document.getElementById('pw').addEventListener('keydown',function(e){ if(e.key==='Enter') login(); });
+document.getElementById('em').addEventListener('keydown',function(e){ if(e.key==='Enter') login(); });
 function load(){
   st('불러오는 중…');
-  fetch(DB+'/reports.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+  fetch(DB+'/reports.json?auth='+authTok,{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.error){ st('권한 만료 — 새로고침 후 다시 로그인하세요.'); return; }
     var tb=document.getElementById('tb');tb.innerHTML='';
     var arr=[];
     Object.keys(d||{}).forEach(function(k){var v=d[k];if(v&&typeof v==='object'){v.__k=k;arr.push(v);}});
@@ -105,10 +107,8 @@ function load(){
       var when=v.t?new Date(v.t).toLocaleString('ko-KR'):'—';
       tr.innerHTML='<td class="mono">'+esc(when)+'</td>'
         +'<td>'+esc(v.nick)+'<span class="sub mono">'+esc(v.ip||'')+'</span></td>'
-        +'<td class="mono">'+esc(v.uid||'—')+'</td>'
         +'<td class="mono">'+esc(v.ip||'—')+'</td>'
-        +'<td>'+esc(v.target)+'<span class="sub mono">'+esc(v.targetUid||'')+'</span></td>'
-        +'<td class="mono">'+esc(v.targetUid||'—')+'</td>'
+        +'<td>'+esc(v.target)+'</td>'
         +'<td>'+esc(v.reason||'')+'</td>'
         +'<td>'+esc(v.detail||'')+'</td>'
         +'<td class="mono">'+esc(v.room||'')+'</td>'
@@ -120,13 +120,13 @@ function load(){
         var k=b.getAttribute('data-k');
         if(!confirm('이 제보를 삭제할까요?'))return;
         b.disabled=true;st('삭제 중…');
-        tok().then(function(T){return fetch(DB+'/reports/'+encodeURIComponent(k)+'.json?auth='+T,{method:'DELETE'});})
+        fetch(DB+'/reports/'+encodeURIComponent(k)+'.json?auth='+authTok,{method:'DELETE'})
         .then(function(){st('삭제 완료');load();})
         .catch(function(){st('삭제 실패 — 다시 시도해 주세요');b.disabled=false;});
       });
     });
     st('');
-  }).catch(function(){st('목록 로드 실패 — 네트워크 확인');});
+  }).catch(function(){st('목록 로드 실패 — 다시 로그인해 주세요');});
 }
 document.getElementById('reload').addEventListener('click',load);
 })();
