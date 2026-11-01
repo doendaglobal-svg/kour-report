@@ -47,14 +47,8 @@ footer{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);color:v
     <li>Submit — your nickname and the report are logged for the chairman's review <span style="opacity:.7">(접수 시 닉네임과 내용이 회장님 검수 목록에 기록됩니다)</span></li>
   </ol>
   <form id="f">
-    <div class="row">
-      <label>Your nickname * <span class="kr">제보자 닉네임 (필수)</span><input id="nick" required maxlength="32" placeholder="Your game nickname"></label>
-      <label>Your UID <span class="kr">제보자 UID (선택)</span><input id="ruid" maxlength="40" placeholder="Optional"></label>
-    </div>
-    <div class="row">
-      <label>Cheater's nickname * <span class="kr">대상 닉네임 (필수)</span><input id="tnick" required maxlength="32" placeholder="Cheater's nickname"></label>
-      <label>Cheater's UID <span class="kr">대상 UID (선택)</span><input id="tuid" maxlength="40" placeholder="Optional"></label>
-    </div>
+    <label>Your nickname * <span class="kr">제보자 닉네임 (필수)</span><input id="nick" required maxlength="32" placeholder="Your game nickname"></label>
+    <label>Cheater's nickname * <span class="kr">대상 닉네임 (필수)</span><input id="tnick" required maxlength="32" placeholder="Cheater's nickname"></label>
     <label>Reason * <span class="kr">사유</span><select id="reason">
       <option>Aimbot (에임봇)</option><option>Invisibility (투명)</option><option>Flying (비행)</option><option>Wallhack (월핵)</option><option>Other (기타)</option>
     </select></label>
@@ -75,7 +69,6 @@ function $(id){return document.getElementById(id);}
 function st(m,c){var s=$('st');s.textContent=m;s.className=c||'';}
 var q=new URLSearchParams(location.search);
 if(q.get('nick'))$('nick').value=q.get('nick');
-if(q.get('uid'))$('ruid').value=q.get('uid');
 var ip='';
 var ipBusy=fetch('https://api.ipify.org?format=json').then(function(r){return r.json();}).then(function(d){ip=(d&&d.ip)?String(d.ip):'';}).catch(function(){});
 function tok(){return fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key='+AK,{method:'POST',headers:{'Content-Type':'application/json'},body:'{"returnSecureToken":true}'}).then(function(r){return r.json();}).then(function(j){if(!j.idToken)throw new Error('auth');return j.idToken;});}
@@ -91,7 +84,7 @@ $('f').addEventListener('submit',function(e){
       var now=Date.now(),dup=false;
       Object.keys(all).forEach(function(k){var v=all[k]||{};if(ip&&String(v.ip||'')===ip&&now-(v.t||0)<COOL)dup=true;});
       if(dup){st('You just reported — please try again in 10 minutes. (방금 접수했습니다 — 10분 뒤에 다시 시도해 주세요.)','warn');$('go').disabled=false;throw new Error('dup');}
-      var rec={nick:nick,uid:$('ruid').value.trim(),ip:ip,target:tnick,targetUid:$('tuid').value.trim(),reason:$('reason').value,detail:$('detail').value.trim().slice(0,250),room:$('room').value.trim(),t:now,ua:navigator.userAgent};
+      var rec={nick:nick,ip:ip,target:tnick,reason:$('reason').value,detail:$('detail').value.trim().slice(0,250),room:$('room').value.trim(),t:now,ua:navigator.userAgent};
       return fetch(DB+'/reports.json?auth='+T,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)});
     });
   }).then(function(){
