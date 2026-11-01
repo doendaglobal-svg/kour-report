@@ -14,30 +14,33 @@ body{margin:0;padding:32px 16px;background:var(--bg);color:var(--tx);font-family
 .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.22em;color:var(--amber);margin:0 0 6px}
 h1{font-family:'Black Ops One',cursive;font-weight:400;font-size:28px;margin:0 0 4px;letter-spacing:.02em}
 .kr-h{display:block;font-family:'IBM Plex Sans KR',sans-serif;font-weight:400;font-size:14px;color:var(--dim);letter-spacing:.01em;margin-top:2px}
-.wrap{max-width:1000px;margin:0 auto}
+.wrap{max-width:1040px;margin:0 auto}
 #gate{max-width:380px;margin:80px auto;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:10px;padding:24px;text-align:center}
 #gate h2{font-family:'Black Ops One',cursive;font-weight:400;font-size:20px;margin:0 0 4px;letter-spacing:.02em}
 #gate .kr-p{color:var(--dim);font-size:13px;margin:0 0 14px}
 #gate input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--tx);padding:10px;font:inherit;margin-top:8px}
 #gate input:focus{outline:none;border-color:var(--amber)}
 #gate button{width:100%;margin-top:12px;background:var(--amber);color:#16120a;border:0;border-radius:6px;padding:11px;font:inherit;font-weight:700;cursor:pointer}
-#gateErr{color:var(--err);font-size:12px;min-height:1.3em;margin:8px 0 0;text-align:center}
+#gateErr{color:#e07070;font-size:12px;min-height:1.3em;margin:8px 0 0;text-align:center}
 #dash{display:none}
 .bar{display:flex;align-items:center;gap:12px;margin:12px 0 16px}
 .count{color:var(--dim);font-size:13px}
 button.r{background:var(--amber);color:#16120a;border:0;border-radius:6px;padding:8px 16px;font:inherit;font-weight:700;cursor:pointer}
 .tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
-table{width:100%;border-collapse:collapse;min-width:760px}
+table{width:100%;border-collapse:collapse;min-width:800px}
 th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 th{font-size:12px;color:var(--amber);font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;white-space:nowrap}
 td{font-size:13px}
 td.mono{font-family:'IBM Plex Mono',monospace;font-size:12px}
-.statb{display:inline-block;background:#fff;color:#16120a;border-radius:4px;padding:3px 10px;font-size:12px;font-weight:700}
+.statb{display:inline-block;background:#fff;color:#16120a;border-radius:4px;padding:3px 10px;font-size:12px;font-weight:700;border:0;cursor:pointer}
 .statb.res{background:#2e7d32;color:#fff}
 button.shotb{background:#2e3947;color:var(--amber);border:0;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer}
+button.delreq{background:#7a1010;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer}
+button.delreq:disabled{opacity:.65;cursor:default}
 .empty{padding:24px;color:var(--dim);text-align:center}
 #st{margin:10px 0;font-size:13px;color:var(--amber);min-height:1.3em}
 .foot{color:var(--dim);font-size:12px;margin-top:14px}
+a.rooml{color:#7fb2e8;text-decoration:none;word-break:break-all}
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 </style>
 </head>
@@ -61,13 +64,13 @@ button.shotb{background:#2e3947;color:var(--amber);border:0;border-radius:4px;pa
   <div class="tablewrap">
     <table>
       <thead><tr>
-        <th>Time</th><th>Reporter</th><th>Target</th><th>Reason</th><th>Details</th><th>Room</th><th>Status</th><th>Screenshot</th>
+        <th>Time</th><th>Reporter (제보자)</th><th>Target</th><th>Reason</th><th>Room</th><th>Status</th><th>Deletion Request</th><th>Screenshot</th>
       </tr></thead>
       <tbody id="tb"></tbody>
     </table>
     <div class="empty" id="empty" hidden>No reports yet. <span style="opacity:.7">(접수된 제보가 없습니다.)</span></div>
   </div>
-  <p class="foot">Read-only view. Reporter IPs are visible to the chairman only. <span style="display:block;opacity:.8">읽기 전용 — 제보자 IP는 회장님만 볼 수 있습니다.</span></p>
+  <p class="foot">Report view only — action records are managed by the chairman.</p>
 </div>
 <script>
 (function(){
@@ -96,7 +99,7 @@ document.getElementById('pw').addEventListener('keydown',function(e){ if(e.key==
 document.getElementById('em').addEventListener('keydown',function(e){ if(e.key==='Enter') login(); });
 function load(){
   st('Loading… (불러오는 중…)');
-  fetch(DB+'/reports.json?auth='+authTok,{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+  fetch(DB+'/reports_mod.json?auth='+authTok,{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
     if(d&&d.error){ st('Session expired — refresh and log in again. (권한 만료 — 새로고침 후 다시 로그인하세요.)'); return; }
     var tb=document.getElementById('tb');tb.innerHTML='';
     var arr=[];
@@ -107,12 +110,13 @@ function load(){
     arr.forEach(function(v){
       var tr=document.createElement('tr');
       var when=v.t?new Date(v.t).toLocaleString('en-US'):'—';
+      var roomHtml=v.room?'<a class="rooml" href="'+esc(v.room)+'" target="_blank" rel="noopener">'+esc(v.room.slice(0,48))+(v.room.length>48?'…':'')+'</a>':'—';
       tr.innerHTML='<td class="mono">'+esc(when)+'</td>'
-        +'<td>'+esc(v.nick)+'</td>'
-        +'<td>'+esc(v.target)+'</td>'
-        +'<td>'+esc(v.reason||'')+'</td>'
-        +'<td>'+esc(v.detail||'')+'</td>'
-        +'<td class="mono">'+esc(v.room||'')+'</td>';
+        +'<td>'+esc(v.nick||'—')+'</td>'
+        +'<td>'+esc(v.target||'—')+'</td>'
+        +'<td>'+esc(v.msg||[v.reason,v.detail].filter(Boolean).join(' — '))+'</td>'
+        +'<td>'+roomHtml+'</td>';
+      /* Status toggle */
       var tdSt=document.createElement('td');
       var sb2=document.createElement('button'); sb2.type='button'; sb2.className='statb';
       function paintStat(){ var res=(v.status==='resolved'); sb2.className='statb'+(res?' res':''); sb2.textContent=res?'Resolved':'Unresolved'; }
@@ -120,18 +124,43 @@ function load(){
       sb2.addEventListener('click',function(){
         var to=(v.status==='resolved')?'unresolved':'resolved';
         sb2.disabled=true;
-        fetch(DB+'/reports/'+encodeURIComponent(v.__k)+'/status.json?auth='+authTok,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(to)})
-        .then(function(){ v.status=to; paintStat(); sb2.disabled=false; })
+        fetch(DB+'/reports_mod/'+encodeURIComponent(v.__k)+'/status.json?auth='+authTok,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(to)})
+        .then(function(){ v.status=to; paintStat(); paintDelReq(); sb2.disabled=false; })
         .catch(function(){ st('Status update failed. (상태 변경 실패)'); sb2.disabled=false; });
       });
       tdSt.appendChild(sb2); tr.appendChild(tdSt);
+      /* Deletion request (해결 시에만 등장) */
+      var tdD=document.createElement('td');
+      function paintDelReq(){
+        tdD.innerHTML='';
+        if(v.status==='resolved'){
+          if(v.delReq){
+            var done=document.createElement('span'); done.className='delreqb'; done.textContent='삭제신청 완료';
+            tdD.appendChild(done);
+          } else {
+            var b=document.createElement('button'); b.type='button'; b.className='delreq'; b.textContent='삭제신청';
+            b.addEventListener('click',function(){
+              b.disabled=true;
+              fetch(DB+'/reports_mod/'+encodeURIComponent(v.__k)+'/delReq.json?auth='+authTok,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(true)})
+              .then(function(){ v.delReq=true; paintDelReq(); })
+              .catch(function(){ st('Request failed. (삭제신청 실패)'); b.disabled=false; });
+            });
+            tdD.appendChild(b);
+          }
+        } else {
+          tdD.innerHTML='<span style="color:var(--dim)">—</span>';
+        }
+      }
+      paintDelReq();
+      tr.appendChild(tdD);
+      /* Screenshot */
       var tdS=document.createElement('td');
       if(v.shot){ var sb=document.createElement('button'); sb.type='button'; sb.className='shotb'; sb.textContent='View';
         sb.addEventListener('click',function(){
           var ex=tr.nextElementSibling;
           if(ex&&ex.__shotRow){ ex.parentNode.removeChild(ex); sb.textContent='View'; return; }
           var er=document.createElement('tr'); er.__shotRow=true;
-          var ec=document.createElement('td'); ec.colSpan=7;
+          var ec=document.createElement('td'); ec.colSpan=8;
           var im=document.createElement('img'); im.src=v.shot; im.style.maxWidth='480px'; im.style.width='100%'; im.style.borderRadius='6px'; im.style.cursor='zoom-in'; im.title='Click to enlarge (클릭하면 크게 보입니다)';
           im.addEventListener('click',function(){
             var ov=document.createElement('div');
