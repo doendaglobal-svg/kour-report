@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ORDO 제보함 — 검수 목록</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e1116;--card:#161c24;--line:#2e3947;--tx:#dfe7ee;--dim:#8a97a5;--amber:#ffb020;--red:#7a1010;}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 16px;background:var(--bg);color:var(--tx);font-family:'IBM Plex Sans KR',system-ui,sans-serif;font-size:14px;line-height:1.5}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.22em;color:var(--amber);margin:0 0 6px}
+h1{font-family:'Black Han Sans',sans-serif;font-weight:400;font-size:30px;margin:0 0 4px}
+.wrap{max-width:1100px;margin:0 auto}
+/* 비밀번호 게이트 */
+#gate{max-width:380px;margin:80px auto;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:10px;padding:24px;text-align:center}
+#gate h2{font-family:'Black Han Sans',sans-serif;font-weight:400;font-size:22px;margin:0 0 4px}
+#gate p{color:var(--dim);font-size:13px;margin:0 0 14px}
+#gate input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--tx);padding:10px;font:inherit;text-align:center}
+#gate input:focus{outline:none;border-color:var(--amber)}
+#gate button{width:100%;margin-top:10px;background:var(--amber);color:#16120a;border:0;border-radius:6px;padding:11px;font:inherit;font-weight:700;cursor:pointer}
+#gateErr{color:var(--err);font-size:12px;min-height:1.3em;margin:8px 0 0}
+#dash{display:none}
+.bar{display:flex;align-items:center;gap:12px;margin:12px 0 16px}
+.count{color:var(--dim);font-size:13px}
+button.r{background:var(--amber);color:#16120a;border:0;border-radius:6px;padding:8px 16px;font:inherit;font-weight:700;cursor:pointer}
+.tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;min-width:900px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--amber);font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;white-space:nowrap}
+td{font-size:13px}
+td.mono{font-family:'IBM Plex Mono',monospace;font-size:12px}
+td .sub{color:var(--dim);font-size:11px;display:block}
+button.del{background:var(--red);color:#fff;border:0;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer}
+button.del:hover{filter:brightness(1.2)}
+.empty{padding:24px;color:var(--dim);text-align:center}
+#st{margin:10px 0;font-size:13px;color:var(--amber);min-height:1.3em}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+</style>
+</head>
+<body>
+<div id="gate">
+  <h2>ORDO 제보함</h2>
+  <p>관리자 접근 — 비밀번호를 입력하세요</p>
+  <input type="password" id="pw" placeholder="비밀번호" autocomplete="current-password">
+  <button id="go" type="button">열기</button>
+  <p id="gateErr"></p>
+</div>
+<div class="wrap" id="dash">
+  <p class="eyebrow">REPORT QUEUE // ORDO — 회장님 전용</p>
+  <h1>제보 검수 목록</h1>
+  <div class="bar">
+    <button class="r" id="reload" type="button">새로고침</button>
+    <span class="count" id="count"></span>
+  </div>
+  <p id="st" role="status" aria-live="polite"></p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr>
+        <th>시각</th><th>제보자 닉네임</th><th>제보자 UID</th><th>IP</th>
+        <th>대상 닉네임</th><th>대상 UID</th><th>사유</th><th>상세</th><th>방</th><th>관리</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>접수된 제보가 없습니다.</div>
+  </div>
+</div>
+<script>
+(function(){
+'use strict';
+var AK='AIzaSyAOQxmxWvOYnw4O8q0XY4woDsNYJde3nNw';
+var DB='https://chairman-ban-default-rtdb.asia-southeast1.firebasedatabase.app';
+/* ═══════════════════════════════════════════════
+   비밀번호 변경 위치 — 아래 값만 고치면 됩니다
+   ═══════════════════════════════════════════════ */
+var PASS='chairman';
+function st(m){document.getElementById('st').textContent=m;}
+function tok(){return fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key='+AK,{method:'POST',headers:{'Content-Type':'application/json'},body:'{"returnSecureToken":true}'}).then(function(r){return r.json();}).then(function(j){if(!j.idToken)throw new Error('auth');return j.idToken;});}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+document.getElementById('go').addEventListener('click',function(){
+  var v=document.getElementById('pw').value;
+  if(v===PASS){
+    document.getElementById('gate').style.display='none';
+    document.getElementById('dash').style.display='block';
+    load();
+  } else {
+    document.getElementById('gateErr').textContent='비밀번호가 틀렸습니다.';
+    document.getElementById('pw').value='';
+  }
+});
+document.getElementById('pw').addEventListener('keydown',function(e){ if(e.key==='Enter') document.getElementById('go').click(); });
+function load(){
+  st('불러오는 중…');
+  fetch(DB+'/reports.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+    var tb=document.getElementById('tb');tb.innerHTML='';
+    var arr=[];
+    Object.keys(d||{}).forEach(function(k){var v=d[k];if(v&&typeof v==='object'){v.__k=k;arr.push(v);}});
+    arr.sort(function(a,b){return (b.t||0)-(a.t||0);});
+    document.getElementById('count').textContent='총 '+arr.length+'건';
+    document.getElementById('empty').hidden=arr.length>0;
+    arr.forEach(function(v){
+      var tr=document.createElement('tr');
+      var when=v.t?new Date(v.t).toLocaleString('ko-KR'):'—';
+      tr.innerHTML='<td class="mono">'+esc(when)+'</td>'
+        +'<td>'+esc(v.nick)+'<span class="sub mono">'+esc(v.ip||'')+'</span></td>'
+        +'<td class="mono">'+esc(v.uid||'—')+'</td>'
+        +'<td class="mono">'+esc(v.ip||'—')+'</td>'
+        +'<td>'+esc(v.target)+'<span class="sub mono">'+esc(v.targetUid||'')+'</span></td>'
+        +'<td class="mono">'+esc(v.targetUid||'—')+'</td>'
+        +'<td>'+esc(v.reason||'')+'</td>'
+        +'<td>'+esc(v.detail||'')+'</td>'
+        +'<td class="mono">'+esc(v.room||'')+'</td>'
+        +'<td><button class="del" type="button" data-k="'+esc(v.__k)+'">삭제</button></td>';
+      tb.appendChild(tr);
+    });
+    Array.prototype.forEach.call(tb.querySelectorAll('button.del'),function(b){
+      b.addEventListener('click',function(){
+        var k=b.getAttribute('data-k');
+        if(!confirm('이 제보를 삭제할까요?'))return;
+        b.disabled=true;st('삭제 중…');
+        tok().then(function(T){return fetch(DB+'/reports/'+encodeURIComponent(k)+'.json?auth='+T,{method:'DELETE'});})
+        .then(function(){st('삭제 완료');load();})
+        .catch(function(){st('삭제 실패 — 다시 시도해 주세요');b.disabled=false;});
+      });
+    });
+    st('');
+  }).catch(function(){st('목록 로드 실패 — 네트워크 확인');});
+}
+document.getElementById('reload').addEventListener('click',load);
+})();
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
