@@ -32,6 +32,9 @@ th{font-size:12px;color:var(--amber);font-family:'IBM Plex Mono',monospace;lette
 td{font-size:13px}
 td.mono{font-family:'IBM Plex Mono',monospace;font-size:12px}
 td .sub{color:var(--dim);font-size:11px;display:block}
+.statb{display:inline-block;background:#fff;color:#16120a;border-radius:4px;padding:3px 10px;font-size:12px;font-weight:700}
+.statb.res{background:#2e7d32;color:#fff}
+button.shotb{background:#2e3947;color:var(--amber);border:0;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer}
 button.del{background:var(--red);color:#fff;border:0;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer}
 button.del:hover{filter:brightness(1.2)}
 .empty{padding:24px;color:var(--dim);text-align:center}
@@ -60,7 +63,7 @@ button.del:hover{filter:brightness(1.2)}
     <table>
       <thead><tr>
         <th>시각</th><th>제보자 닉네임</th><th>IP</th>
-        <th>대상 닉네임</th><th>사유</th><th>상세</th><th>방</th><th>관리</th>
+        <th>대상 닉네임</th><th>사진</th><th>사유</th><th>상세</th><th>방</th><th>상태</th><th>관리</th>
       </tr></thead>
       <tbody id="tb"></tbody>
     </table>
@@ -94,6 +97,7 @@ document.getElementById('pw').addEventListener('keydown',function(e){ if(e.key==
 document.getElementById('em').addEventListener('keydown',function(e){ if(e.key==='Enter') login(); });
 function load(){
   st('불러오는 중…');
+  fetch(DB+'/reports_ip.json?auth='+authTok,{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return{};}).then(function(ipMap){
   fetch(DB+'/reports.json?auth='+authTok,{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
     if(d&&d.error){ st('권한 만료 — 새로고침 후 다시 로그인하세요.'); return; }
     var tb=document.getElementById('tb');tb.innerHTML='';
@@ -106,13 +110,38 @@ function load(){
       var tr=document.createElement('tr');
       var when=v.t?new Date(v.t).toLocaleString('ko-KR'):'—';
       tr.innerHTML='<td class="mono">'+esc(when)+'</td>'
-        +'<td>'+esc(v.nick)+'<span class="sub mono">'+esc(v.ip||'')+'</span></td>'
-        +'<td class="mono">'+esc(v.ip||'—')+'</td>'
+        +'<td>'+esc(v.nick)+'<span class="sub mono">'+esc((ipMap&&ipMap[v.__k]&&ipMap[v.__k].ip)||'')+'</span></td>'
+        +'<td class="mono">'+esc((ipMap&&ipMap[v.__k]&&ipMap[v.__k].ip)||'—')+'</td>'
         +'<td>'+esc(v.target)+'</td>'
         +'<td>'+esc(v.reason||'')+'</td>'
         +'<td>'+esc(v.detail||'')+'</td>'
         +'<td class="mono">'+esc(v.room||'')+'</td>'
         +'<td><button class="del" type="button" data-k="'+esc(v.__k)+'">삭제</button></td>';
+      var tdSt=document.createElement('td');
+      var res2=(v.status==='resolved');
+      var b2=document.createElement('span'); b2.className='statb'+(res2?' res':''); b2.style.cursor='default'; b2.textContent=res2?'Resolved':'Unresolved';
+      tdSt.appendChild(b2); tr.appendChild(tdSt);
+      var tdS=document.createElement('td');
+      if(v.shot){ var sb=document.createElement('button'); sb.type='button'; sb.className='shotb'; sb.textContent='보기';
+        sb.addEventListener('click',function(){
+          var ex=tr.nextElementSibling;
+          if(ex&&ex.__shotRow){ ex.parentNode.removeChild(ex); sb.textContent='보기'; return; }
+          var er=document.createElement('tr'); er.__shotRow=true;
+          var ec=document.createElement('td'); ec.colSpan=8;
+          var im=document.createElement('img'); im.src=v.shot; im.style.maxWidth='480px'; im.style.width='100%'; im.style.borderRadius='6px'; im.style.cursor='zoom-in'; im.title='클릭하면 크게 보입니다';
+          im.addEventListener('click',function(){
+            var ov=document.createElement('div');
+            ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:24px;';
+            var big=document.createElement('img'); big.src=v.shot; big.style.maxWidth='96vw'; big.style.maxHeight='92vh'; big.style.borderRadius='8px';
+            ov.appendChild(big); ov.addEventListener('click',function(){ document.body.removeChild(ov); });
+            document.body.appendChild(ov);
+          });
+          var tip=document.createElement('span'); tip.textContent='클릭하면 크게 보입니다'; tip.style.cssText='color:var(--dim);font-size:11px;margin-left:8px;';
+          ec.appendChild(im); ec.appendChild(tip); er.appendChild(ec); tr.parentNode.insertBefore(er,tr.nextSibling); sb.textContent='닫기';
+        });
+        tdS.appendChild(sb);
+      } else { tdS.textContent='—'; }
+      tr.appendChild(tdS);
       tb.appendChild(tr);
     });
     Array.prototype.forEach.call(tb.querySelectorAll('button.del'),function(b){
@@ -120,6 +149,8 @@ function load(){
         var k=b.getAttribute('data-k');
         if(!confirm('이 제보를 삭제할까요?'))return;
         b.disabled=true;st('삭제 중…');
+        fetch(DB+'/reports/'+encodeURIComponent(k)+'.json?auth='+authTok,{method:'DELETE'});
+        try{ fetch(DB+'/reports_ip/'+encodeURIComponent(k)+'.json?auth='+authTok,{method:'DELETE'}); }catch(eD2){}
         fetch(DB+'/reports/'+encodeURIComponent(k)+'.json?auth='+authTok,{method:'DELETE'})
         .then(function(){st('삭제 완료');load();})
         .catch(function(){st('삭제 실패 — 다시 시도해 주세요');b.disabled=false;});
@@ -127,6 +158,7 @@ function load(){
     });
     st('');
   }).catch(function(){st('목록 로드 실패 — 다시 로그인해 주세요');});
+  });
 }
 document.getElementById('reload').addEventListener('click',load);
 })();
