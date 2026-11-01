@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ORDO Report Queue — Moderator View</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e1116;--card:#161c24;--line:#2e3947;--tx:#dfe7ee;--dim:#8a97a5;--amber:#ffb020;--red:#7a1010;}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 16px;background:var(--bg);color:var(--tx);font-family:'IBM Plex Sans KR',system-ui,sans-serif;font-size:14px;line-height:1.5}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.22em;color:var(--amber);margin:0 0 6px}
+h1{font-family:'Black Ops One',cursive;font-weight:400;font-size:28px;margin:0 0 4px;letter-spacing:.02em}
+.kr-h{display:block;font-family:'IBM Plex Sans KR',sans-serif;font-weight:400;font-size:14px;color:var(--dim);letter-spacing:.01em;margin-top:2px}
+.wrap{max-width:1000px;margin:0 auto}
+#gate{max-width:380px;margin:80px auto;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:10px;padding:24px;text-align:center}
+#gate h2{font-family:'Black Ops One',cursive;font-weight:400;font-size:20px;margin:0 0 4px;letter-spacing:.02em}
+#gate .kr-p{color:var(--dim);font-size:13px;margin:0 0 14px}
+#gate input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--tx);padding:10px;font:inherit;margin-top:8px}
+#gate input:focus{outline:none;border-color:var(--amber)}
+#gate button{width:100%;margin-top:12px;background:var(--amber);color:#16120a;border:0;border-radius:6px;padding:11px;font:inherit;font-weight:700;cursor:pointer}
+#gateErr{color:var(--err);font-size:12px;min-height:1.3em;margin:8px 0 0;text-align:center}
+#dash{display:none}
+.bar{display:flex;align-items:center;gap:12px;margin:12px 0 16px}
+.count{color:var(--dim);font-size:13px}
+button.r{background:var(--amber);color:#16120a;border:0;border-radius:6px;padding:8px 16px;font:inherit;font-weight:700;cursor:pointer}
+.tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;min-width:760px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--amber);font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;white-space:nowrap}
+td{font-size:13px}
+td.mono{font-family:'IBM Plex Mono',monospace;font-size:12px}
+.statb{display:inline-block;background:#fff;color:#16120a;border-radius:4px;padding:3px 10px;font-size:12px;font-weight:700}
+.statb.res{background:#2e7d32;color:#fff}
+button.shotb{background:#2e3947;color:var(--amber);border:0;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer}
+.empty{padding:24px;color:var(--dim);text-align:center}
+#st{margin:10px 0;font-size:13px;color:var(--amber);min-height:1.3em}
+.foot{color:var(--dim);font-size:12px;margin-top:14px}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+</style>
+</head>
+<body>
+<div id="gate">
+  <h2>Moderator Login</h2>
+  <p class="kr-p">열람 권한 로그인 — 권한이 있는 계정만 볼 수 있습니다</p>
+  <input type="email" id="em" placeholder="Moderator email (권한 이메일)" autocomplete="username">
+  <input type="password" id="pw" placeholder="Password (비밀번호)" autocomplete="current-password">
+  <button id="go" type="button">Log in <span style="font-weight:400">(로그인)</span></button>
+  <p id="gateErr"></p>
+</div>
+<div class="wrap" id="dash">
+  <p class="eyebrow">REPORT QUEUE // ORDO — MODERATOR VIEW</p>
+  <h1>Report Queue<span class="kr-h">제보 열람</span></h1>
+  <div class="bar">
+    <button class="r" id="reload" type="button">Refresh <span style="font-weight:400">(새로고침)</span></button>
+    <span class="count" id="count"></span>
+  </div>
+  <p id="st" role="status" aria-live="polite"></p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr>
+        <th>Time</th><th>Reporter</th><th>Target</th><th>Reason</th><th>Details</th><th>Room</th><th>Status</th><th>Screenshot</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No reports yet. <span style="opacity:.7">(접수된 제보가 없습니다.)</span></div>
+  </div>
+  <p class="foot">Read-only view. Reporter IPs are visible to the chairman only. <span style="display:block;opacity:.8">읽기 전용 — 제보자 IP는 회장님만 볼 수 있습니다.</span></p>
+</div>
+<script>
+(function(){
+'use strict';
+var AK='AIzaSyAOQxmxWvOYnw4O8q0XY4woDsNYJde3nNw';
+var DB='https://chairman-ban-default-rtdb.asia-southeast1.firebasedatabase.app';
+var authTok='';
+function st(m){document.getElementById('st').textContent=m;}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function gateErr(m){document.getElementById('gateErr').textContent=m;}
+function login(){
+  var em=document.getElementById('em').value.trim(), pw=document.getElementById('pw').value;
+  if(!em||!pw){gateErr('Email and password are required. (이메일과 비밀번호를 입력하세요.)');return;}
+  document.getElementById('go').disabled=true; gateErr('');
+  fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key='+AK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em,password:pw,returnSecureToken:true})})
+  .then(function(r){return r.json();}).then(function(j){
+    if(!j.idToken){gateErr('Login failed — check your credentials. (로그인 실패 — 권한 계정 정보를 확인하세요.)');document.getElementById('go').disabled=false;return;}
+    authTok=j.idToken;
+    document.getElementById('gate').style.display='none';
+    document.getElementById('dash').style.display='block';
+    load();
+  }).catch(function(){gateErr('Login failed — network error. (로그인 실패 — 네트워크 확인)');document.getElementById('go').disabled=false;});
+}
+document.getElementById('go').addEventListener('click',login);
+document.getElementById('pw').addEventListener('keydown',function(e){ if(e.key==='Enter') login(); });
+document.getElementById('em').addEventListener('keydown',function(e){ if(e.key==='Enter') login(); });
+function load(){
+  st('Loading… (불러오는 중…)');
+  fetch(DB+'/reports.json?auth='+authTok,{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.error){ st('Session expired — refresh and log in again. (권한 만료 — 새로고침 후 다시 로그인하세요.)'); return; }
+    var tb=document.getElementById('tb');tb.innerHTML='';
+    var arr=[];
+    Object.keys(d||{}).forEach(function(k){var v=d[k];if(v&&typeof v==='object'){v.__k=k;arr.push(v);}});
+    arr.sort(function(a,b){return (b.t||0)-(a.t||0);});
+    document.getElementById('count').textContent=arr.length+' reports (건)';
+    document.getElementById('empty').hidden=arr.length>0;
+    arr.forEach(function(v){
+      var tr=document.createElement('tr');
+      var when=v.t?new Date(v.t).toLocaleString('en-US'):'—';
+      tr.innerHTML='<td class="mono">'+esc(when)+'</td>'
+        +'<td>'+esc(v.nick)+'</td>'
+        +'<td>'+esc(v.target)+'</td>'
+        +'<td>'+esc(v.reason||'')+'</td>'
+        +'<td>'+esc(v.detail||'')+'</td>'
+        +'<td class="mono">'+esc(v.room||'')+'</td>';
+      var tdSt=document.createElement('td');
+      var sb2=document.createElement('button'); sb2.type='button'; sb2.className='statb';
+      function paintStat(){ var res=(v.status==='resolved'); sb2.className='statb'+(res?' res':''); sb2.textContent=res?'Resolved':'Unresolved'; }
+      paintStat();
+      sb2.addEventListener('click',function(){
+        var to=(v.status==='resolved')?'unresolved':'resolved';
+        sb2.disabled=true;
+        fetch(DB+'/reports/'+encodeURIComponent(v.__k)+'/status.json?auth='+authTok,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(to)})
+        .then(function(){ v.status=to; paintStat(); sb2.disabled=false; })
+        .catch(function(){ st('Status update failed. (상태 변경 실패)'); sb2.disabled=false; });
+      });
+      tdSt.appendChild(sb2); tr.appendChild(tdSt);
+      var tdS=document.createElement('td');
+      if(v.shot){ var sb=document.createElement('button'); sb.type='button'; sb.className='shotb'; sb.textContent='View';
+        sb.addEventListener('click',function(){
+          var ex=tr.nextElementSibling;
+          if(ex&&ex.__shotRow){ ex.parentNode.removeChild(ex); sb.textContent='View'; return; }
+          var er=document.createElement('tr'); er.__shotRow=true;
+          var ec=document.createElement('td'); ec.colSpan=7;
+          var im=document.createElement('img'); im.src=v.shot; im.style.maxWidth='480px'; im.style.width='100%'; im.style.borderRadius='6px'; im.style.cursor='zoom-in'; im.title='Click to enlarge (클릭하면 크게 보입니다)';
+          im.addEventListener('click',function(){
+            var ov=document.createElement('div');
+            ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:24px;';
+            var big=document.createElement('img'); big.src=v.shot; big.style.maxWidth='96vw'; big.style.maxHeight='92vh'; big.style.borderRadius='8px';
+            ov.appendChild(big); ov.addEventListener('click',function(){ document.body.removeChild(ov); });
+            document.body.appendChild(ov);
+          });
+          var tip=document.createElement('span'); tip.textContent='Click to enlarge (클릭하면 크게 보입니다)'; tip.style.cssText='color:var(--dim);font-size:11px;margin-left:8px;';
+          ec.appendChild(im); ec.appendChild(tip); er.appendChild(ec); tr.parentNode.insertBefore(er,tr.nextSibling); sb.textContent='Close';
+        });
+        tdS.appendChild(sb);
+      } else { tdS.textContent='—'; }
+      tr.appendChild(tdS);
+      tb.appendChild(tr);
+    });
+    st('');
+  }).catch(function(){st('Load failed — please log in again. (목록 로드 실패 — 다시 로그인해 주세요)');});
+}
+document.getElementById('reload').addEventListener('click',load);
+})();
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
